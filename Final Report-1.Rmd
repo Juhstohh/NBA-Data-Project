@@ -1,0 +1,183 @@
+---
+title: "Final Report"
+author: "Justin Ford"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readr)
+library(randomForest)
+library(janitor)
+library(tidyverse)
+
+best_2021_2022_NBA_Player_Stats_Regular <- read_delim("2021-2022 NBA Player Stats - Regular.csv", 
+                                                  delim = ";", escape_double = FALSE, trim_ws = TRUE)
+
+setty_2022_2023_NBA_Player_Stats_Regular <- read_delim("2022-2023 NBA Player Stats - Regular.csv", 
+                                                  delim = ";", escape_double = FALSE, trim_ws = TRUE)
+
+set_2021_2022_NBA_Player_Stats_Regular <- subset(best_2021_2022_NBA_Player_Stats_Regular, Pos == "C" | Pos == "PG" | Pos == "SG" | Pos == "SF" | Pos == "PF")
+
+data_2022_2023_NBA_Player_Stats_Regular <- subset(setty_2022_2023_NBA_Player_Stats_Regular, Pos == "C" | Pos == "PG" | Pos == "SG" | Pos == "SF" | Pos == "PF")
+
+```
+
+
+This is the final report for my final project in Data Science 1 Spring 2024. I chose to use multiple NBA datasets from Kaggle.com to observe statistics from the previous two seasons (2021-2022 & 2022-2023). The following is what I found after researching and cleaning:
+
+This study & dataset explores the different relationships between significant statistics in the National Basketball Association. Things such as 3 Point Percentage (3PT%), Free Throw Percentage (FT%), Points Per Game (PPG), along with many others. The objective of my research is to investigate the links between different variables, predict values for performance indeicators, and apply an advanced prediction method to gain insight into a player or another similar stat. 
+
+We begin with an observation on 3PT% and Position on the court. This will look at how each position is a factor for what your 3PT% will be:
+
+```{r three}
+pos_vs_3pt <- data_2022_2023_NBA_Player_Stats_Regular %>% select(Pos, `3P%`) %>% 
+  mutate(`3P%` = case_when(`3P%`<0.25 ~ "0% to 25%  ",
+                           `3P%`<0.5 ~ "25% to 50%  ",
+                           `3P%`<0.75 ~ "50% to 75%  ",
+                           .default = "75% to 100%  "))
+
+table(pos_vs_3pt)
+```
+This table represents the percentage that each position shoots the three point ball. This means shooting the ball behind the 3 pt line.
+It is not suprising that most players sit in the 25-50% category because that is where the league average in 3p% is. What is interesting is that there are more centers shooting 50-75% than any other position when it is supposed to be a low-percentage shot for them. This could be due to low sample size or a center that specializes in threes.
+
+```{r pos}
+three_2022_2023_NBA_Player_Stats_Regular <- data_2022_2023_NBA_Player_Stats_Regular %>% filter(`3P%` < 1.000 & `3P%` > 0.000 & `3P%` > 0.5)
+
+center_2022_2023_NBA_Player_Stats_Regular <- data_2022_2023_NBA_Player_Stats_Regular %>% filter(`3P%` < 1.000)
+
+ggplot(data = center_2022_2023_NBA_Player_Stats_Regular, aes(x = Pos, y = `3P%`)) +
+  geom_point() +  
+  geom_boxplot() +  
+  labs(x = "Position", y = "Three-Point Percentage", title = "Three-Point Percentage by Position")
+
+```
+This graph represents the same thing as above but in more detail and better visually. This shows that everything except the center position is pretty even in 3 point percentage. It is also interesting how centers have the largest range of percentages because some don't shoot threes at all and some specialize or "can" shoot threes. 
+
+```{r mean}
+mean_pos <- aggregate(`3P%` ~ Pos, data = three_2022_2023_NBA_Player_Stats_Regular, FUN = mean, na.rm = TRUE)
+
+print(mean_pos)
+
+```
+
+This table showcases the mean three point percentage from every position. Note that I did take away the data that had 3 point percentage at a 1 and 0 so this shows the actual percentage. It is very interesting that centers are first in this category. It is probably due to the limitations that I set on this dataset. 
+
+Next we will look at the relationship between FG% and FT%. This will look at different NBA players in the last two seasons based on their FG% and FT%.
+
+
+```{r free}
+high_ft_fg <- set_2021_2022_NBA_Player_Stats_Regular %>% filter(`FG%` >= 0.48 & `FT%` >= 0.79 & FTA >= 1)
+two_high_ft_vs_fg <- data_2022_2023_NBA_Player_Stats_Regular %>% filter(`FG%` >= 0.5 & `FT%` >= 0.79 & FTA >= 1)
+
+ggplot(data = high_ft_fg, aes(x = `FG%`, y = `FT%`, label = Player)) +
+  geom_point() +  
+  geom_text(vjust = 1.5, hjust = -0.5, size = 3) + 
+  labs(x = "Field Goal Percentage (FG%)", y = "Free Throw Percentage (FT%)", title = "FG% vs FT% per Player") + 
+  theme_minimal()
+```
+
+
+This graph shows the field goal percentage and free throw percentage compared to each other. You can see that most people are in the same category for both variables meaning that most players are consistent with their percentages. But there are some rare cases where someone has a very high fg% while having a low ft% and vice versa.
+
+
+Finally to finish off the relationship portion of this report, we will take a look at PPG vs Age in 2022-2023. This will compare NBA player's ages to how many points per game they score. 
+
+
+```{r  age}
+ppg_vs_age_2022_2023 <- data_2022_2023_NBA_Player_Stats_Regular %>% filter(PTS >= 20, GS > 60)
+ppg_vs_age_2021_2022 <- set_2021_2022_NBA_Player_Stats_Regular %>% filter(PTS >= 20, GS > 60)
+
+points_vs_age <- data_2022_2023_NBA_Player_Stats_Regular %>% select(PTS, Age) %>% 
+  mutate(PTS = case_when(PTS < 10 ~ "0 to 10  ",
+                           PTS < 20 ~ "10 to 20  ",
+                           PTS < 30 ~ "20 to 30  ",
+                           .default = "30 and up  "))
+
+table(points_vs_age)
+```
+This table shows us the distribution of points per game(ppg) per age. According to this table it looks like most of the time there are many people that average less than 10 and very little that average more than 20. The prime age looks to be between 21 and 27, where there are falloffs after both of those numbers. The main outlier in this table is the 38 year old that averages between 20 and 30 which we will get to later. 
+
+```{r  ppg}
+ggplot(data = ppg_vs_age_2021_2022, aes(x = Age, y = PTS, label = Player)) +
+  geom_point() + 
+  geom_text(vjust = 1.5, hjust = -0.5, size = 3) + 
+  labs(x = "AGE", y = "PPG", title = "AT LEAST 20 PPG BY AGE (AT LEAST 60 STARTS)")
+
+ggplot(data = ppg_vs_age_2022_2023, aes(x = Age, y = PTS, label = Player)) +
+  geom_point() + 
+  geom_text(vjust = 1.5, hjust = -0.5, size = 3) + 
+  labs(x = "AGE", y = "PPG", title = "AT LEAST 20 PPG BY AGE (AT LEAST 60 STARTS)")
+
+```
+
+These graphs show the players that started at least 60 games and averaged more than 20 points.  In the 2021 season there were 24 players that met this criteria mostly being superstars but this number grew to 35 by the next season. This shows that the league is getting better with more players averaging 20 points regardless of how old they are getting. 
+
+
+
+Now we move on to predictions. To predict Points Per Game (PPG) for the 2022-2023 NBA season and beyond, I employed a linear regression model with Age, Games Started (GS), Three-Point Percentage (3P%), and Field Goal Percentage (FG%) as predictors. The initial model, lm_model, was created using these variables. To refine this model, I performed backward selection using the step function, which removes the least significant predictors until an optimal model is achieved. 
+
+
+```{r  regression}
+
+# Fit the linear model
+lm_model <- lm(PTS ~ Age + GS + `3P%` + `FG%`, data = data_2022_2023_NBA_Player_Stats_Regular)
+
+# Perform backward selection
+backward_model <- step(lm_model, direction = "backward")
+
+summary(backward_model)
+
+par(mfrow = c(2, 2))
+plot(backward_model)
+
+predicted_ppg <- predict(backward_model, data_2022_2023_NBA_Player_Stats_Regular)
+ggplot(data_2022_2023_NBA_Player_Stats_Regular, aes(x = PTS, y = predicted_ppg)) +
+  geom_point() +
+  labs(x = "Actual PPG", y = "Predicted PPG", title = "Actual vs Predicted PPG")
+
+```
+
+
+The coefficients table shows the estimated impact of each predictor variable on PTS. For example, each additional game started increases the PPG by approximately 0.182 points. The three-point percentage and field goal percentage also have significant positive impacts on PPG. The multiple R-squared value of 0.5627 indicates that approximately 56.27% of the variance in PPG is explained by the model. The F-statistic and p-value confirm the overall significance of the model.
+
+
+For my advanced prediction model I used randomForest on a case study that focused on predicting Lebron James's PPG based on his 2021 season. 
+
+```{r case}
+model_data <- set_2021_2022_NBA_Player_Stats_Regular %>% select(PTS, Age, GS, `3P%`, `FG%`, `FT%`, MP, `2P%`)
+model_data <- model_data %>% clean_names()
+
+# Train the Random Forest model
+set.seed(123)
+rf_model <- randomForest(pts ~ age + gs + x3p_percent + fg_percent + mp + x2p_percent, data = model_data, importance = TRUE)
+
+
+# View the model summary and variable importance
+print(rf_model)
+importance(rf_model)
+
+# Predict PPG for LeBron James
+lebron_data <- set_2021_2022_NBA_Player_Stats_Regular %>% filter(Player == "LeBron James")
+lebron_data <- lebron_data %>% clean_names()
+lebron_predictors <- lebron_data %>% select(age, gs, x3p_percent, fg_percent, mp, x2p_percent)
+lebron_predicted_ppg <- predict(rf_model, newdata = lebron_predictors)
+lebron_predicted_ppg
+```
+
+
+To demonstrate the application of this model, we predict the PPG for LeBron James using his 2021-2022 season data. LeBron's relevant statistics such as age, games started, 3p%, fg%, minutes played, and 2p% are extracted and cleaned in the same manner as the training data. These cleaned predictor variables are then fed into the Random Forest model to generate the predicted PPG. This approach illustrates the practical use of machine learning in sports analytics, providing insights into player performance and potential future outcomes. The prediction for LeBron James offers a specific example of how the model can be used to forecast individual player performance based on their historical data. We could do this for any other player but Lebron is the most known.
+
+
+
+In conclusion this analysis demonstrates the use of various statistical methods to explore relationships between NBA player performance metrics and the implementation of an advanced prediction method to predict Points Per Game. Relationhips are very apparent between different variables in this dataset, including position vs 3p% and age vs ppg. The linear regression model is a good predictor on ppg for the foreseeable future based on different variables such as games started, minutes played, etc. The Random Forest model provided valuable insights into the factors influencing player performance and showcased a specific example of how it can be used for one player based on historical data. Further steps may involve refining the model, incorporating more data, and exploring other advanced techniques to enhance predictive accuracy. Overall, I found many interesting things that may help me understand the game of basketball further. 
+
+
+
+
+
+
+
